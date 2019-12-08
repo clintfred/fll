@@ -26,6 +26,7 @@ color_right = ColorSensor(INPUT_3)
 # See all: https://python-ev3dev.readthedocs.io/en/latest/display.html
 f = fonts.load('luBS18')
 
+
 def show(text):
     #disp.text_grid(t, x=5, y=5)
     disp.clear()
@@ -36,6 +37,7 @@ def show(text):
     #down = 50
     disp.draw.text((lr, down), text, font=f, align="left")
     disp.update()
+
 
 def follow_line(speed=10, want_rli=65, edge="right"):
     m1 = LargeMotor(OUTPUT_A)
@@ -57,13 +59,17 @@ def follow_line(speed=10, want_rli=65, edge="right"):
         m2.on(speed + bias)
         time.sleep(0.01)
 
+
 def follow_line_left():
     follow_line(speed=10, want_rli=65, edge="left")
+
 
 def follow_line_right():
     follow_line(speed=10, want_rli=65, edge="right")
 
 # Needs 2 color sensors!!!
+
+
 def align_black(speed=10, black_thresh=20):
     m1 = LargeMotor(OUTPUT_A)
     m2 = LargeMotor(OUTPUT_D)
@@ -83,6 +89,7 @@ def align_black(speed=10, black_thresh=20):
             m2.off()
             right_running = False
 
+
 def align_forever():
     while True:
         s.beep()
@@ -96,6 +103,7 @@ def align_forever():
             show(t)
             time.sleep(0.1)
 
+
 def display_rfi():
     while not b.any():
         rli = color_left.reflected_light_intensity
@@ -104,6 +112,7 @@ def display_rfi():
         logging.info(t)
         time.sleep(0.1)
 
+
 def beep_and_wait_for_button():
     # Don't do anything else
     s.beep()
@@ -111,10 +120,12 @@ def beep_and_wait_for_button():
         time.sleep(0.1)
     s.beep()
 
+
 def motor_test():
     m = LargeMotor(OUTPUT_D)
     m.on_for_rotations(SpeedPercent(75), 5)
-    #hoi bois!!!!
+    # hoi bois!!!!
+
 
 def gyro_test():
     m1 = LargeMotor(OUTPUT_A)
@@ -126,7 +137,6 @@ def gyro_test():
     m2.off()
 
 
-
 def long_gyro_test():
     s.beep()
     show("push a button")
@@ -135,8 +145,8 @@ def long_gyro_test():
     b.wait_for_pressed(["enter"])
     s.beep()
     gyro_test()
-    #motor_test()
-    #for i in range(50):
+    # motor_test()
+    # for i in range(50):
     # Loop until button pressed, displaying gyro angle
     while not b.any():
         ang = gyro.angle
@@ -145,20 +155,31 @@ def long_gyro_test():
         logging.info(t)
         time.sleep(0.1)
 
+
+def mission_12_dandb():
+    s.beep()
+
+
+def mission_2_crane():
+    s.beep()
+
+
 done = False
 wait_for = None
 choice = 0
+
 progs = [
-    ("gyro test", gyro_test),
-    ("motor test", motor_test),
-    ("align black", align_black),
-    ("line left", follow_line_left),
-    ("line right", follow_line_right),
+    ("mission 2 crane", mission_2_crane),
+    ("mission 12 dandb", mission_12_dandb),
+    ("mission red blocks", mission_red_blocks),
+    ("mission tan blocks", mission_tan_blocks),
 ]
+
+
 def change(changed_buttons):
     global done
     global choice
-    # changed_buttons is a list of 
+    # changed_buttons is a list of
     # tuples of changed button names and their states.
     logging.info('These buttons changed state: ' + str(changed_buttons))
     if wait_for is not None and wait_for in changed_buttons:
@@ -195,7 +216,8 @@ def run_program():
         rli_left = color_left.reflected_light_intensity
         rli_right = color_right.reflected_light_intensity
         t = "rli: {} {}".format(rli_left, rli_right)
-        t = "Angle: {}\nrli: {} {}\nProg: {}\nWaiting for l button".format(ang, rli_left, rli_right, progs[choice][0])
+        t = "Angle: {}\nrli: {} {}\nProg: {}\nWaiting for l button".format(
+            ang, rli_left, rli_right, progs[choice][0])
         show(t)
         b.process()
         time.sleep(0.1)
@@ -209,7 +231,7 @@ def run_program():
 if __name__ == "__main__":
     # Resets to 0, does not fix drift
     gyro.reset()
-    b.on_change = change    
+    b.on_change = change
     s.beep()
     s.beep()
     s.beep()
