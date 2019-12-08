@@ -19,7 +19,7 @@ disp = Display()
 b = Button()
 s = Sound()
 
-color_left = ColorSensor(INPUT_1)
+color_left = ColorSensor(INPUT_2)
 color_right = ColorSensor(INPUT_3)
 
 # 14, 18, ...
@@ -125,8 +125,7 @@ def gyro_test():
     m1.off()
     m2.off()
 
-# Resets to 0, does not fix drift
-gyro.reset()
+
 
 def long_gyro_test():
     s.beep()
@@ -180,7 +179,7 @@ def change(changed_buttons):
     return done
 
 # Set callback from b.process()
-b.on_change = change
+
 
 def run_program():
     # This loop checks button states
@@ -206,8 +205,13 @@ def run_program():
     progs[choice][1]()
     s.beep()
 
-s.beep()
-s.beep()
-s.beep()
-while True:
-    run_program()
+
+if __name__ == "__main__":
+    # Resets to 0, does not fix drift
+    gyro.reset()
+    b.on_change = change    
+    s.beep()
+    s.beep()
+    s.beep()
+    while True:
+        run_program()
