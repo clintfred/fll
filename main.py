@@ -15,6 +15,8 @@ from ev3dev2.sensor import *
 from ev3dev2.button import *
 from ev3dev2.led import Leds
 
+b = Button()
+s = Sound()
 
 # logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)5s %(filename)s: %(message)s")
@@ -338,14 +340,43 @@ def mission_12_dandb(gyro):
 
     # drive_inches(26)
  
+def mission_tan_blocks(gyro):
+    drive_inches(36, 40)
+    drive_inches(-36, 80)
+
+
+def mission_red_blocks(gyro):
+    
+    """ 
+    Setup:
+    Line up robot from wall to the 6th hashmark.
+    Line up blocks so it looks like a rectangle.
+    Two pieces of LEGO block will be sticking up on oppisite ends.
+    Place an upgrade on the furthest LEGO block sticking up.
+    Make sure that the blocks are lined up on the left side of the attachment.
+    Your good to go!
+    """
+
+    drive_inches(9)
+    tank_diff.turn_right(15, 90)
+    drive_inches(19, 30)
+    drive_inches(-31, 25)
+    tank_diff.turn_left(15, 90)
+    
+
 if __name__ == "__main__":
 
     log.info("starting")
 
+    s.beep()
+    b.wait_for_pressed(["enter"])
+
     gyro = setup_gyro()
     gyro.mode = GyroSensor.MODE_GYRO_ANG
     # mission_2_crane(gyro)
-    mission_12_dandb(gyro)
+    #mission_12_dandb(gyro)
+    #mission_red_blocks(gyro)
+    mission_tan_blocks(gyro)
 
     # drive_test()
     # old()
