@@ -15,6 +15,7 @@ from ev3dev2.sensor import *
 from ev3dev2.button import *
 from ev3dev2.led import Leds
 
+
 b = Button()
 s = Sound()
 
@@ -361,43 +362,7 @@ def mission_red_blocks(gyro):
     tank_diff.turn_right(15, 90)
     drive_inches(19, 30)
     drive_inches(-31, 25)
-    tank_diff.turn_left(15, 90)
-    
-
-if __name__ == "__main__":
-
-    log.info("starting")
-
-    s.beep()
-    b.wait_for_pressed(["enter"])
-
-    gyro = setup_gyro()
-    gyro.mode = GyroSensor.MODE_GYRO_ANG
-    # mission_2_crane(gyro)
-    #mission_12_dandb(gyro)
-    #mission_red_blocks(gyro)
-    mission_tan_blocks(gyro)
-
-    # drive_test()
-    # old()
-    if False:
-        log.info("angle {}".format(gyro.angle))
-        turn_degrees(gyro, 270, 20)
-        log.info("angle {}".format(gyro.angle))
-
-    if False:
-        drive_inches(3 * 18)
-
-    if False: 
-        m = MediumMotor(OUTPUT_C)
-        #m.on_for_degrees(20, 900)
-        m.on_for_rotations(100, 10)
-    
-    if False:
-        sp = -80
-        #tank_drive.on_for_seconds(sp, sp, 2)
-        #tank_diff.on_for_seconds(sp, sp, 2)
-        tank_diff.on_for_distance(sp, 10*10*5)
+    tank_diff.turn_left(15, 90)    
 
 if __name__ == "__main_XXX__":
 
@@ -425,3 +390,100 @@ if __name__ == "__main_XXX__":
     except Exception:
         tank.stop()
         raise
+
+done = False
+wait_for = None
+choice = 0
+progs = [
+    ("mission 2 crane", mission_2_crane),
+    ("mission 12 dandb", mission_12_dandb),
+    ("mission red blocks", mission_red_blocks),
+    ("mission tan blocks", mission_tan_blocks),
+]
+
+def change(changed_buttons):
+    global done
+    global choice
+    # changed_buttons is a list of 
+    # tuples of changed button names and their states.
+    logging.info('These buttons changed state: ' + str(changed_buttons))
+    if wait_for is not None and wait_for in changed_buttons:
+        logging.info('You pressed the done button')
+        done = True
+    if ("up", True) in changed_buttons:
+        choice -= 1
+        if choice < 0:
+            choice = len(progs) - 1
+    elif ("down", True) in changed_buttons:
+        choice += 1
+        if choice >= len(progs):
+            choice = 0
+    logging.info('Done is: ' + str(done))
+    # will also beep if release button
+    s.beep()
+
+# Set callback from b.process()
+b.on_change = change
+
+def run_program(gyro):
+    # This loop checks button states
+    # continuously and calls appropriate event handlers
+    global done
+    global wait_for
+    done = False
+    wait_for = ("enter", True)
+    logging.info("Waiting for enter button.")
+    while not done:
+        ang = gyro.angle
+        rli_left = color_left.reflected_light_intensity
+        rli_right = color_right.reflected_light_intensity
+        t = "Angle: {}\nrli: {} {}\nProg {}: {}\nWaiting for enter".format(ang, rli_left, rli_right, choice, progs[choice][0])
+        show(t)
+        b.process()
+        time.sleep(0.1)
+
+    logging.info("And done.")
+    logging.info("Running {}".format(progs[choice][0]))
+    progs[choice][1](gyro)
+    s.beep()
+
+if __name__ == "__main__":
+
+    log.info("starting")
+
+    s.beep()
+    b.wait_for_pressed(["enter"])
+
+    gyro = setup_gyro()
+    gyro.mode = GyroSensor.MODE_GYRO_ANG
+    # mission_2_crane(gyro)
+    #mission_12_dandb(gyro)
+    #mission_red_blocks(gyro)
+    #mission_tan_blocks(gyro)
+
+    s.beep()
+    s.beep()
+    s.beep()
+    while True:
+        run_program(gyro)
+
+    # drive_test()
+    # old()
+    if False:
+        log.info("angle {}".format(gyro.angle))
+        turn_degrees(gyro, 270, 20)
+        log.info("angle {}".format(gyro.angle))
+
+    if False:
+        drive_inches(3 * 18)
+
+    if False: 
+        m = MediumMotor(OUTPUT_C)
+        #m.on_for_degrees(20, 900)
+        m.on_for_rotations(100, 10)
+    
+    if False:
+        sp = -80
+        #tank_drive.on_for_seconds(sp, sp, 2)
+        #tank_diff.on_for_seconds(sp, sp, 2)
+        tank_diff.on_for_distance(sp, 10*10*5)
