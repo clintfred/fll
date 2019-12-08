@@ -3,12 +3,14 @@ from ev3dev2.motor import LargeMotor, OUTPUT_A, OUTPUT_B, OUTPUT_D, SpeedPercent
 from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3, INPUT_4
 from ev3dev2.sensor.lego import TouchSensor
 from ev3dev2.led import Leds
-from ev3dev2.sensor.lego import GyroSensor
-from ev3dev2.sensor.lego import ColorSensor
-from ev3dev2.button import Button
+from ev3dev2.motor import *
+from ev3dev2.wheel import *
+from ev3dev2.sensor.lego import *
+from ev3dev2.sensor import *
+from ev3dev2.button import *
 from ev3dev2.display import Display
-import ev3dev2.fonts as fonts
 from ev3dev2.sound import Sound
+import ev3dev2.fonts as fonts
 import logging
 import time
 
@@ -21,10 +23,52 @@ s = Sound()
 
 color_left = ColorSensor(INPUT_2)
 color_right = ColorSensor(INPUT_3)
-
 # 14, 18, ...
 # See all: https://python-ev3dev.readthedocs.io/en/latest/display.html
 f = fonts.load('luBS18')
+
+"""
+Please depending on the robot change the number below:                                <<<       IMPORTANT!!!!                                         HEY!!!!
+WHICH_ROBOT = 0 is if the robot has one color sensor                               <<<<<<OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+WHICH_ROBOT = 1 is if the robot has two color sensor                                  <<<                          LOOK!!!!
+PLEASE AND THANK YOU
+"""
+WHICH_ROBOT = 2
+if WHICH_ROBOT == 0:
+    L_MOTOR = OUTPUT_A
+    R_MOTOR = OUTPUT_B
+    GYRO_PORT = INPUT_3
+    IS_INVERTED = True
+    DEGREES_PER_INCH = 43.0 * 2  # guess
+elif WHICH_ROBOT == 1:
+    # LRPB
+    L_MOTOR = OUTPUT_D
+    R_MOTOR = OUTPUT_A
+    GYRO_PORT = INPUT_4
+    IS_INVERTED = False
+    DEGREES_PER_INCH = 53.0
+elif WHICH_ROBOT == 2:
+    # LRPB
+    L_MOTOR = OUTPUT_A
+    R_MOTOR = OUTPUT_D
+    GYRO_PORT = INPUT_4
+    IS_INVERTED = False
+    DEGREES_PER_INCH = 53.0
+else:
+    L_MOTOR = OUTPUT_A
+    R_MOTOR = OUTPUT_D
+    GYRO_PORT = INPUT_2
+    IS_INVERTED = False
+    DEGREES_PER_INCH = 43.0 + 1 - 1
+
+
+class WideWheel(Wheel):
+    def __init__(self):
+        Wheel.__init__(self, 68.8, 36)
+
+
+tank_drive = MoveTank(L_MOTOR, R_MOTOR)
+tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 146.75)
 
 
 def show(text):
@@ -156,23 +200,155 @@ def long_gyro_test():
         time.sleep(0.1)
 
 
-def mission_12_dandb():
-    s.beep()
+# gyro: gyro sensor
+# deg: degrees to turn (positive is clockwise)
+# speed: motor speed 0-100 (must be positive)
+def turn_degrees(gyro, deg, speed=20):
+    gyro.mode = GyroSensor.MODE_GYRO_ANG
+
+    if abs(deg) <= 1:
+        return
+
+    if deg > 0:
+        lspeed = speed
+    else:
+        lspeed = -speed
+    turn_about_center = True
+    if turn_about_center:
+        rspeed = -lspeed
+    else:
+        rspeed = 0
+    time.sleep(0.5)
+    gyro.reset()
+
+    start = gyro.value()
+    log.info("gyro inital value: {}".format(start))
+    log.info("gyro in mode: {}".format(gyro.mode))
+    # log.info("gyro inital value after mode set: {}".format(gyro.value))
+
+    tank_drive.on(lspeed, rspeed)
+    log.info("turning {}: {} {}".format(deg, lspeed, rspeed))
+
+    gyro.wait_until_angle_changed_by(abs(deg))
+    tank_drive.off()
+    time.sleep(0.5)
+
+    final = gyro.value()
+
+    log.info("gyro final value: {}".format(final))
+    log.info("stopping")
+
+    # Go back the amount we missed or went over.
+    correction = final - deg
+    log.info("correction: {}".format(correction))
+
+    if abs(correction) <= 1:
+        pass
+    else:
+        if deg > 0:
+            lspeed = 5
+        else:
+            lspeed = -5
+        turn_about_center = True
+        if turn_about_center:
+            rspeed = -lspeed
+        else:
+            rspeed = 0
+
+        tank_drive.on(rspeed, lspeed)
+        log.info("C: turning {}: {} {}".format(deg, lspeed, rspeed))
+        log.info("C: gyro in mode: {}".format(gyro.mode))
+        log.info("C: gyro inital value: {}".format(gyro.value()))
+        gyro.mode = GyroSensor.MODE_GYRO_ANG
+        log.info("C: gyro inital value after mode set: {}".format(gyro.value()))
+
+        gyro.wait_until_angle_changed_by(abs(correction)-1)
+        tank_drive.off()
+        time.sleep(0.5)
+        log.info("C: gyro final value: {}".format(gyro.value()))
 
 
-def mission_2_crane():
-    s.beep()
+def inches_to_mill(inches):
+    return 25.4 * inches
+
+
+def move_turn():
+    tank_drive.on_for_seconds(SpeedPercent(-50), SpeedPercent(-50), 1)
+    tank_drive.on_for_seconds(SpeedPercent(-50), SpeedPercent(50), 0.65)
+
+
+def drive_inches(distance, speed=50):
+    # wheel diameter is 43.2mm (?)
+    circum_inches = 4.32 * 3.14 / 2.54
+    rotations = distance / circum_inches
+    speed = -speed if IS_INVERTED else speed
+    #tank_drive.on_for_rotations(SpeedPercent(speed), SpeedPercent(speed), rotations)
+    tank_diff.on_for_distance(SpeedPercent(
+        speed), inches_to_mill(distance))
+
+
+def mission_2_crane(gyro):
+    drive_inches(12)
+    # 6 inches out 6 inches over
+    turn_degrees(gyro, 45)
+    drive_inches(7*1.414)
+    turn_degrees(gyro, -45)
+    drive_inches(9)
+    drive_inches(6, -20)
+    turn_degrees(gyro, -45)
+    drive_inches(3*1.414)
+    turn_degrees(gyro, 45)
+    drive_inches(4)
+
+
+def mission_12_dandb(gyro):
+
+    drive_inches(.5)
+    #turn_degrees(gyro, -72, 15)
+    tank_diff.turn_right(15, 69)
+    drive_inches(51, 30)
+
+    # turn_degrees(gyro, 180, 7)
+
+    # turn_degrees(gyro, -85, 35)
+
+    # turn_degrees(gyro, -85, 35)
+
+    # drive_inches(26)
+
+
+def mission_tan_blocks(gyro):
+    drive_inches(36, 40)
+    drive_inches(-36, 80)
+
+
+def mission_red_blocks(gyro):
+    """
+    Setup:
+    Line up robot from wall to the 6th hashmark.
+    Line up blocks so it looks like a rectangle.
+    Two pieces of LEGO block will be sticking up on oppisite ends.
+    Place an upgrade on the furthest LEGO block sticking up.
+    Make sure that the blocks are lined up on the left side of the attachment.
+    Your good to go!
+    """
+
+    drive_inches(9, 20)
+    tank_diff.turn_right(15, 80)
+    drive_inches(22.5, 30)
+    drive_inches(-37, 25)
+    #tank_diff.turn_left(15, 70)
 
 
 done = False
 wait_for = None
-choice = 0
+choice = 2
 
 progs = [
-    ("mission 2 crane", mission_2_crane),
-    ("mission 12 dandb", mission_12_dandb),
-    ("mission red blocks", mission_red_blocks),
-    ("mission tan blocks", mission_tan_blocks),
+    ("m: 2 crane", mission_2_crane),
+    ("m: 12 dandb", mission_12_dandb),
+    ("m: red blocks", mission_red_blocks),
+    ("m: tan blocks", mission_tan_blocks),
 ]
 
 
@@ -216,7 +392,7 @@ def run_program():
         rli_left = color_left.reflected_light_intensity
         rli_right = color_right.reflected_light_intensity
         t = "rli: {} {}".format(rli_left, rli_right)
-        t = "Angle: {}\nrli: {} {}\nProg: {}\nWaiting for l button".format(
+        t = "Ang: {}\nrli: {} {}\nP: {}\nWaiting for l button".format(
             ang, rli_left, rli_right, progs[choice][0])
         show(t)
         b.process()
@@ -224,7 +400,7 @@ def run_program():
 
     logging.info("And done.")
     logging.info("Running {}".format(progs[choice][0]))
-    progs[choice][1]()
+    progs[choice][1](gyro)
     s.beep()
 
 
