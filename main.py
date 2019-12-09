@@ -318,14 +318,17 @@ def mission_12_dandb(gyro):
 
 
 def mission_tan_blocks(gyro):
-    drive_inches(36, 40)
-    drive_inches(-36, 80)
+    # drive_inches(36, 40)
+    # drive_inches(-36, 80)
+    drive_inches(2, 20)
+    tank_diff.turn_right(20, 63)
+    drive_inches(43, 46)
 
 
 def mission_red_blocks(gyro):
     """
     Setup:
-    Line up robot from wall to the 6th hashmark.
+    Line up robot from wall to the 5th from the right hashmark.
     Line up blocks so it looks like a rectangle.
     Two pieces of LEGO block will be sticking up on oppisite ends.
     Place an upgrade on the furthest LEGO block sticking up.
@@ -334,10 +337,10 @@ def mission_red_blocks(gyro):
     """
 
     drive_inches(9, 20)
-    tank_diff.turn_right(15, 80)
+    tank_diff.turn_right(15, 85)
     drive_inches(22.5, 30)
-    drive_inches(-37, 25)
-    #tank_diff.turn_left(15, 70)
+    drive_inches(-37, 80)
+    tank_diff.turn_left(80, 70)
 
 
 done = False
