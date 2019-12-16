@@ -61,6 +61,9 @@ else:
     IS_INVERTED = False
     DEGREES_PER_INCH = 43.0 + 1 - 1
 
+M_MOTOR = OUTPUT_B
+lifter = MediumMotor(M_MOTOR)
+
 
 class WideWheel(Wheel):
     def __init__(self):
@@ -68,17 +71,20 @@ class WideWheel(Wheel):
 
 
 tank_drive = MoveTank(L_MOTOR, R_MOTOR)
-tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 146.75)
+# 180 at 15 is about 3-5 degrees too much
+# tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 146.75)
+# Works great at 180 and speed 15 at 143
+tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
 
 
 def show(text):
-    #disp.text_grid(t, x=5, y=5)
+    # disp.text_grid(t, x=5, y=5)
     disp.clear()
     # 0 = left, 80 = far right?
     # align="center" doesn't seem to work
     lr = 0
-    down = 20
-    #down = 50
+    down = 0
+    # down = 50
     disp.draw.text((lr, down), text, font=f, align="left")
     disp.update()
 
@@ -92,7 +98,7 @@ def follow_line(speed=10, want_rli=65, edge="right"):
         show(t)
         diff = rli - want_rli
         # bigger adjustment for faster speed?
-        #factor = speed / 100.0
+        # factor = speed / 100.0
         # light difference is +/- 40 but
         # motor difference should be small.
         factor = 0.05
@@ -114,7 +120,7 @@ def follow_line_right():
 # Needs 2 color sensors!!!
 
 
-def align_black(speed=10, black_thresh=20):
+def align_black_intensity(speed=10, black_thresh=20):
     m1 = LargeMotor(OUTPUT_A)
     m2 = LargeMotor(OUTPUT_D)
     m1.on(speed)
@@ -134,10 +140,62 @@ def align_black(speed=10, black_thresh=20):
             right_running = False
 
 
-def align_forever():
+def align_left(c_name, speed=10):
+    m1 = LargeMotor(OUTPUT_A)
+    m2 = LargeMotor(OUTPUT_D)
+    m1.on(speed)
+    m2.on(speed)
+    left_running = True
+    right_running = True
+    while left_running:
+        name_l = color_left.color_name
+        name_r = color_right.color_name
+        rli_left = -1
+        rli_right = -1
+        t = "rli: {} {}\n{} {}".format(rli_left, rli_right, name_l, name_r)
+        show(t)
+        if name_l == c_name:
+            m1.off()
+            m2.off()
+            left_running = False
+
+
+def align_color(c_name, speed=10, black_thresh=20):
+    m1 = LargeMotor(OUTPUT_A)
+    m2 = LargeMotor(OUTPUT_D)
+    m1.on(speed)
+    m2.on(speed)
+    left_running = True
+    right_running = True
+    while left_running or right_running:
+        name_l = color_left.color_name
+        name_r = color_right.color_name
+        rli_left = -1
+        rli_right = -1
+        t = "rli: {} {}\n{} {}".format(rli_left, rli_right, name_l, name_r)
+        show(t)
+        if name_l == c_name:
+            m1.off()
+            left_running = False
+        if name_r == c_name:
+            m2.off()
+            right_running = False
+
+
+def align_black(speed=10, black_thresh=20):
+    align_color("Black", speed, black_thresh)
+
+
+def align_accurate(speed=10, black_thresh=20):
+    align_color("Black", speed, black_thresh)
+    align_color("White", -speed / 2, black_thresh)
+    align_color("Black", speed / 2, black_thresh)
+
+
+def align_forever(gyro=None):
     while True:
         s.beep()
-        #follow_line(speed=20, edge="left")
+        # follow_line(speed=20, edge="left")
         align_black(speed=10)
         s.beep()
         while not b.any():
@@ -146,6 +204,21 @@ def align_forever():
             t = "rli: {} {}".format(rli_left, rli_right)
             show(t)
             time.sleep(0.1)
+
+
+def align_once(gyro=None):
+    s.beep()
+    # follow_line(speed=20, edge="left")
+    align_accurate(speed=10)
+    s.beep()
+    while not b.any():
+        name_l = color_left.color_name
+        name_r = color_right.color_name
+        rli_left = -1
+        rli_right = -1
+        t = "rli: {} {}\n{} {}".format(rli_left, rli_right, name_l, name_r)
+        show(t)
+        time.sleep(0.1)
 
 
 def display_rfi():
@@ -184,8 +257,8 @@ def gyro_test():
 def long_gyro_test():
     s.beep()
     show("push a button")
-    #b.wait_for_pressed([Button.enter, Button.right])
-    #b.wait_for_bump([Button.enter, Button.right])
+    # b.wait_for_pressed([Button.enter, Button.right])
+    # b.wait_for_bump([Button.enter, Button.right])
     b.wait_for_pressed(["enter"])
     s.beep()
     gyro_test()
@@ -203,7 +276,7 @@ def long_gyro_test():
 # gyro: gyro sensor
 # deg: degrees to turn (positive is clockwise)
 # speed: motor speed 0-100 (must be positive)
-def turn_degrees(gyro, deg, speed=20):
+def turn_degrees_gyro(gyro, deg, speed=20):
     gyro.mode = GyroSensor.MODE_GYRO_ANG
 
     if abs(deg) <= 1:
@@ -268,6 +341,13 @@ def turn_degrees(gyro, deg, speed=20):
         log.info("C: gyro final value: {}".format(gyro.value()))
 
 
+def turn_degrees(gyro, deg, speed=15):
+    if deg > 0:
+        tank_diff.turn_right(speed, deg)
+    else:
+        tank_diff.turn_left(speed, -deg)
+
+
 def inches_to_mill(inches):
     return 25.4 * inches
 
@@ -282,7 +362,7 @@ def drive_inches(distance, speed=50):
     circum_inches = 4.32 * 3.14 / 2.54
     rotations = distance / circum_inches
     speed = -speed if IS_INVERTED else speed
-    #tank_drive.on_for_rotations(SpeedPercent(speed), SpeedPercent(speed), rotations)
+    # tank_drive.on_for_rotations(SpeedPercent(speed), SpeedPercent(speed), rotations)
     tank_diff.on_for_distance(SpeedPercent(
         speed), inches_to_mill(distance))
 
@@ -301,12 +381,15 @@ def mission_2_crane(gyro):
     drive_inches(4)
 
 
-def mission_12_dandb(gyro):
+def mission_white_blocks(gyro):
 
-    drive_inches(.5)
-    #turn_degrees(gyro, -72, 15)
-    tank_diff.turn_right(15, 69)
-    drive_inches(51, 30)
+    drive_inches(.85, speed=12)
+    # turn_degrees(gyro, -72, 15)
+    tank_diff.turn_right(15, 69.25)
+    drive_inches(61, 30)
+    # LIFTER.on_for_rotations(10, 1)
+    drive_inches(-4, 30)
+    # LIFTER.on_for_rotations(10, -1, False)
 
     # turn_degrees(gyro, 180, 7)
 
@@ -317,12 +400,46 @@ def mission_12_dandb(gyro):
     # drive_inches(26)
 
 
-def mission_tan_blocks(gyro):
+def mission_tan_blocks_old(gyro):
     # drive_inches(36, 40)
     # drive_inches(-36, 80)
     drive_inches(2, 20)
     tank_diff.turn_right(20, 63)
     drive_inches(43, 46)
+    drive_inches(43, -46)
+    tank_diff.turn_right(20, 27)
+    drive_inches(20, -40)
+    tank_diff.turn_left(80, 80)
+
+
+def mission_tan_blocks_plus(gyro):
+    drive_inches(2, 20)
+    #tank_diff.turn_right(15, 65.75)
+    tank_diff.turn_right(15, 67)
+    drive_inches(37, 46)
+    align_accurate(10)
+    drive_inches(5.15, 20)
+    drive_inches(-3, 20)
+    lifter.on_for_rotations(50, 1, brake=False)
+    align_accurate(-10)
+    tank_diff.turn_right(15, 45)
+    drive_inches(10, 20)
+    lifter.on_for_rotations(-50, 1, brake=False)
+    align_left("Black", 10)
+    # 4.5" is about right if want to go along line
+    #drive_inches(4.5, 20)
+    drive_inches(4, 20)
+    tank_diff.turn_left(15, 45)
+    # follow_line_left()
+    drive_inches(10, speed=20)
+    lifter.on_for_rotations(50, 1, brake=False)
+    drive_inches(-10, speed=20)
+    lifter.on_for_rotations(-50, 1, brake=False)
+
+    # drive_inches(43, -46)
+    # tank_diff.turn_right(15, 27)
+    # drive_inches(20, -40)
+    # tank_diff.turn_left(80, 80)
 
 
 def mission_red_blocks(gyro):
@@ -340,24 +457,42 @@ def mission_red_blocks(gyro):
     tank_diff.turn_right(15, 85)
     drive_inches(22.5, 30)
     drive_inches(-37, 80)
-    tank_diff.turn_left(80, 70)
+    tank_diff.turn_left(80, 80)
+
+
+def motor_test(gyro):
+    lifter.on_for_rotations(50, 1)
+    lifter.on_for_rotations(50, -1)
 
 
 done = False
 wait_for = None
-choice = 2
+choice = 0
+choice_incr = 0
+turn_ang = 180
+
+
+def turn_test(gyro):
+    tank_diff.turn_right(15, turn_ang)
+    time.sleep(5)
+    tank_diff.turn_left(15, turn_ang)
+
 
 progs = [
-    ("m: 2 crane", mission_2_crane),
-    ("m: 12 dandb", mission_12_dandb),
+    ("m: align",  align_once),
+    ("m: test",  motor_test),
+    ("m: turn_test", turn_test),
+    ("m: white blocks", mission_white_blocks),
+    ("m: tan blocks", mission_tan_blocks_plus),
     ("m: red blocks", mission_red_blocks),
-    ("m: tan blocks", mission_tan_blocks),
+    ("m: 2 crane", mission_2_crane),
 ]
 
 
 def change(changed_buttons):
     global done
     global choice
+    global turn_ang
     # changed_buttons is a list of
     # tuples of changed button names and their states.
     logging.info('These buttons changed state: ' + str(changed_buttons))
@@ -374,6 +509,10 @@ def change(changed_buttons):
         choice += 1
         if choice >= len(progs):
             choice = 0
+    elif ("left", True) in changed_buttons:
+        turn_ang -= 45
+    elif ("right", True) in changed_buttons:
+        turn_ang += 45
     logging.info('Done is: ' + str(done))
     s.beep()
     return done
@@ -390,13 +529,13 @@ def run_program():
     wait_for = ("enter", True)
     logging.info("Waiting for enter button.")
     while not done:
-        #ang = gyro.angle
+        # ang = gyro.angle
         ang = 0
         rli_left = color_left.reflected_light_intensity
         rli_right = color_right.reflected_light_intensity
-        t = "rli: {} {}".format(rli_left, rli_right)
-        t = "Ang: {}\nrli: {} {}\nP: {}\nWaiting for l button".format(
-            ang, rli_left, rli_right, progs[choice][0])
+        # t = "rli: {} {}".format(rli_left, rli_right)
+        t = "Ang: {}\nrli: {} {}\nP: {}\nA: {}\nWaiting for l button".format(
+            ang, rli_left, rli_right, progs[choice][0], turn_ang)
         show(t)
         b.process()
         time.sleep(0.1)
@@ -405,6 +544,9 @@ def run_program():
     logging.info("Running {}".format(progs[choice][0]))
     progs[choice][1](gyro)
     s.beep()
+
+    global choice
+    choice = choice + choice_incr
 
 
 if __name__ == "__main__":
