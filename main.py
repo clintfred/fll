@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env micropython
+# #/usr/bin/env python3
 from ev3dev2.motor import LargeMotor, OUTPUT_A, OUTPUT_B, OUTPUT_D, SpeedPercent, MoveTank
 from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3, INPUT_4
 from ev3dev2.sensor.lego import TouchSensor
@@ -8,16 +9,17 @@ from ev3dev2.wheel import *
 from ev3dev2.sensor.lego import *
 from ev3dev2.sensor import *
 from ev3dev2.button import *
-from ev3dev2.display import Display
+#from ev3dev2.display import Display
+from ev3dev2.console import Console
 from ev3dev2.sound import Sound
-import ev3dev2.fonts as fonts
+#import ev3dev2.fonts as fonts
 import logging
 import time
 
 logging.basicConfig(level=logging.DEBUG)
 
 gyro = GyroSensor(INPUT_4)
-disp = Display()
+disp = Console()
 b = Button()
 s = Sound()
 
@@ -25,7 +27,7 @@ color_left = ColorSensor(INPUT_2)
 color_right = ColorSensor(INPUT_3)
 # 14, 18, ...
 # See all: https://python-ev3dev.readthedocs.io/en/latest/display.html
-f = fonts.load('luBS18')
+#f = fonts.load('luBS18')
 
 """
 Please depending on the robot change the number below:                                <<<       IMPORTANT!!!!                                         HEY!!!!
@@ -79,14 +81,15 @@ tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
 
 def show(text):
     # disp.text_grid(t, x=5, y=5)
-    disp.clear()
+    disp.reset_console()
     # 0 = left, 80 = far right?
     # align="center" doesn't seem to work
     lr = 0
     down = 0
     # down = 50
-    disp.draw.text((lr, down), text, font=f, align="left")
-    disp.update()
+    disp.text_at(text,1,1)
+    #disp.draw.text((lr, down), text, font=f, align="left")
+    #disp.update()
 
 
 def follow_line(speed=10, want_rli=65, edge="right"):
@@ -495,23 +498,25 @@ def change(changed_buttons):
     global turn_ang
     # changed_buttons is a list of
     # tuples of changed button names and their states.
+    if len(changed_buttons) == 0:
+        return False
     logging.info('These buttons changed state: ' + str(changed_buttons))
     if wait_for is not None and wait_for in changed_buttons:
         logging.info('You pressed the done button')
         done = True
     else:
         done = False
-    if ("up", True) in changed_buttons:
+    if "up" in changed_buttons:
         choice -= 1
         if choice < 0:
             choice = len(progs) - 1
-    elif ("down", True) in changed_buttons:
+    elif "down" in changed_buttons:
         choice += 1
         if choice >= len(progs):
             choice = 0
-    elif ("left", True) in changed_buttons:
+    elif "left" in changed_buttons:
         turn_ang -= 45
-    elif ("right", True) in changed_buttons:
+    elif "right" in changed_buttons:
         turn_ang += 45
     logging.info('Done is: ' + str(done))
     s.beep()
@@ -525,9 +530,11 @@ def run_program():
     # continuously and calls appropriate event handlers
     global done
     global wait_for
+    global choice
     done = False
-    wait_for = ("enter", True)
+    wait_for = "enter"
     logging.info("Waiting for enter button.")
+    logging.info(sys.implementation.name == "micropython")
     while not done:
         # ang = gyro.angle
         ang = 0
@@ -537,7 +544,7 @@ def run_program():
         t = "Ang: {}\nrli: {} {}\nP: {}\nA: {}\nWaiting for l button".format(
             ang, rli_left, rli_right, progs[choice][0], turn_ang)
         show(t)
-        b.process()
+        done = change(b.buttons_pressed)
         time.sleep(0.1)
 
     logging.info("And done.")
@@ -545,9 +552,8 @@ def run_program():
     progs[choice][1](gyro)
     s.beep()
 
-    global choice
-    choice = choice + choice_incr
 
+    choice = choice + choice_incr
 
 if __name__ == "__main__":
     # Resets to 0, does not fix drift
@@ -558,3 +564,4 @@ if __name__ == "__main__":
     s.beep()
     while True:
         run_program()
+
