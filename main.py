@@ -87,9 +87,9 @@ def show(text):
     lr = 0
     down = 0
     # down = 50
-    disp.text_at(text,1,1)
+    disp.text_at(text, 1, 1)
     #disp.draw.text((lr, down), text, font=f, align="left")
-    #disp.update()
+    # disp.update()
 
 
 def follow_line(speed=10, want_rli=65, edge="right"):
@@ -189,10 +189,11 @@ def align_black(speed=10, black_thresh=20):
     align_color("Black", speed, black_thresh)
 
 
-def align_accurate(speed=10, black_thresh=20):
+def align_accurate(speed=10, num_passes=2, black_thresh=20):
     align_color("Black", speed, black_thresh)
-    align_color("White", -speed / 2, black_thresh)
-    align_color("Black", speed / 2, black_thresh)
+    for i in range(num_passes - 1):
+        align_color("White", -speed / 2, black_thresh)
+        align_color("Black", speed / 2, black_thresh)
 
 
 def align_forever(gyro=None):
@@ -415,29 +416,72 @@ def mission_tan_blocks_old(gyro):
     tank_diff.turn_left(80, 80)
 
 
-def mission_tan_blocks_plus(gyro):
-    drive_inches(2, 20)
+def mission_tan_blocks_plus_save(gyro):
+    drive_inches(2, 15)
     #tank_diff.turn_right(15, 65.75)
-    tank_diff.turn_right(15, 67)
-    drive_inches(37, 46)
-    align_accurate(10)
-    drive_inches(5.15, 20)
-    drive_inches(-3, 20)
-    lifter.on_for_rotations(50, 1, brake=False)
-    align_accurate(-10)
-    tank_diff.turn_right(15, 45)
-    drive_inches(10, 20)
-    lifter.on_for_rotations(-50, 1, brake=False)
-    align_left("Black", 10)
-    # 4.5" is about right if want to go along line
-    #drive_inches(4.5, 20)
-    drive_inches(4, 20)
-    tank_diff.turn_left(15, 45)
-    # follow_line_left()
-    drive_inches(10, speed=20)
+    tank_diff.turn_right(15, 77)
+    # Drive almost to white
+    drive_inches(37.5, 30)
+    align_color("White")
+    align_accurate(10, num_passes=3)
+    # turn
+    turn_to_tan = 43.75
+    tank_diff.turn_left(15, turn_to_tan)
+    drive_inches(7.75, 20)
+    drive_inches(-7.75, 20)
+    tank_diff.turn_right(15, turn_to_tan + 6)
+    drive_inches(18, 20)
+
+
+def down(gyro):
+    lifter.on_for_degrees(-50, 15, brake=False)
+
+
+def mission_tan_blocks_plus(gyro):
+    # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
+    drive_inches(5, 15)
+    #tank_diff.turn_right(15, 65.75)
+    tank_diff.turn_right(15, 90.5)
+    # Drive almost to white
+    drive_inches(40, 30)
+    # align_left()
+    tank_diff.turn_left(15, 30)
+    align_color("White")
+    align_accurate(10, num_passes=3)
+    drive_inches(9, 30)
+    tank_diff.turn_left(15, 90)
+    align_color("White")
+    align_accurate(10, num_passes=3)
+    drive_inches(4.75, 20)
+    drive_inches(-4.75, 20)
+    # M08_Elevator
+    tank_diff.turn_right(15, 90)
+    drive_inches(10, 40)
     lifter.on_for_rotations(50, 1, brake=False)
     drive_inches(-10, speed=20)
     lifter.on_for_rotations(-50, 1, brake=False)
+    # Mo9_safety factor
+    turn_extra = 17
+    tank_diff.turn_right(15, 30 + turn_extra)
+    lifter.on_for_degrees(50, 120, brake=False)
+    drive_inches(5, 20)
+    # swing front pointer 20 left, (20 right to straighten then) 20 right
+    swing_turn = 20
+    tank_diff.turn_left(15, turn_extra + swing_turn / 2)
+    lifter.on_for_degrees(-50, 90, brake=False)
+    tank_diff.turn_left(15, swing_turn / 2)
+    #tank_diff.turn_right(15, swing_turn * 2)
+    #tank_diff.turn_right(15, swing_turn)
+    drive_inches(-1, 20)
+    tank_diff.turn_right(15, swing_turn + 90)
+    lifter.on_for_degrees(50, 90, brake=False)
+    drive_inches(4, 30)
+    tank_diff.turn_left(15, 45)
+    drive_inches(-2, 30)
+    tank_diff.turn_left(15, 55)
+    drive_inches(-65, 60)
+    drive_inches(1, 30)
+    tank_diff.turn_right(50, 75)
 
     # drive_inches(43, -46)
     # tank_diff.turn_right(15, 27)
@@ -482,11 +526,12 @@ def turn_test(gyro):
 
 
 progs = [
+    ("m: down", down),
+    ("m: tan blocks", mission_tan_blocks_plus),
     ("m: align",  align_once),
     ("m: test",  motor_test),
     ("m: turn_test", turn_test),
     ("m: white blocks", mission_white_blocks),
-    ("m: tan blocks", mission_tan_blocks_plus),
     ("m: red blocks", mission_red_blocks),
     ("m: 2 crane", mission_2_crane),
 ]
@@ -552,8 +597,8 @@ def run_program():
     progs[choice][1](gyro)
     s.beep()
 
-
     choice = choice + choice_incr
+
 
 if __name__ == "__main__":
     # Resets to 0, does not fix drift
@@ -564,4 +609,3 @@ if __name__ == "__main__":
     s.beep()
     while True:
         run_program()
-
