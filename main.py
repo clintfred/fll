@@ -76,7 +76,11 @@ tank_drive = MoveTank(L_MOTOR, R_MOTOR)
 # 180 at 15 is about 3-5 degrees too much
 # tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 146.75)
 # Works great at 180 and speed 15 at 143
-tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
+# was turning too much on 1/5
+#tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
+# was turning too much on 1/6
+#tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 141.5)
+tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 141)
 
 
 def show(text):
@@ -437,6 +441,57 @@ def down(gyro):
     lifter.on_for_degrees(-50, 15, brake=False)
 
 
+def big_O_by_crane(gyro):
+    drive_inches(18, 25)
+
+
+def red_ending(gyro):
+    """
+    Setup the robot with the wheels on the 5th hashmark.
+    """
+    drive_inches(5, 15)
+    #tank_diff.turn_right(15, 65.75)
+    tank_diff.turn_right(15, 89.5)
+    # Drive almost to white
+    drive_inches(39, 30)
+    # @ or near
+    tank_diff.turn_left(15, 30)
+    drive_inches(1, 10)
+    align_color("White")
+    #first align
+    align_accurate(10, num_passes=3)
+    drive_inches(5, 30)
+    tank_diff.turn_left(15, 90)
+    align_color("White")
+    align_accurate(10, num_passes=3)
+    #SECOND align
+    #drive_inches(-3.5, 10)
+    tank_diff.turn_left(15, 65)
+    drive_inches(11, 20)
+    lifter.on_for_degrees(50, 350, brake=False)
+    #End of the blocks, starting the bridge
+    drive_inches(-7.5, 20)
+    tank_diff.turn_right(15, 65)
+    #The Big Ending
+    drive_inches(10, 30)
+    align_accurate(10, num_passes=2)
+    drive_inches(-6, 20)
+    drive_inches(35, 35)
+
+def circle_straight(gyro):
+    drive_inches(16, 30)
+    lifter.on_for_rotations(50, 1)
+    drive_inches(-8, 30)
+    tank_diff.turn_right(15, 45)
+    drive_inches(-19, 30)
+    drive_inches(1, 30)
+    tank_diff.turn_left(15, 90)
+    s.beep()
+    s.beep()
+    s.beep()
+    s.beep()
+
+
 def mission_tan_blocks_plus(gyro):
     # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
     drive_inches(5, 15)
@@ -526,8 +581,11 @@ def turn_test(gyro):
 
 
 progs = [
-    ("m: down", down),
+
     ("m: tan blocks", mission_tan_blocks_plus),
+    ("m: Big O Crane", big_O_by_crane),
+    ("m: ReD EnDiNg", red_ending),
+    ("m: circle_straight", circle_straight),
     ("m: align",  align_once),
     ("m: test",  motor_test),
     ("m: turn_test", turn_test),
@@ -555,16 +613,17 @@ def change(changed_buttons):
         choice -= 1
         if choice < 0:
             choice = len(progs) - 1
+        s.beep()
     elif "down" in changed_buttons:
         choice += 1
         if choice >= len(progs):
             choice = 0
+        s.beep()
     elif "left" in changed_buttons:
-        turn_ang -= 45
+        lifter.on_for_degrees(-100, 15, brake=True)
     elif "right" in changed_buttons:
-        turn_ang += 45
+        lifter.on_for_degrees(100, 15, brake=True)
     logging.info('Done is: ' + str(done))
-    s.beep()
     return done
 
 # Set callback from b.process()
@@ -590,7 +649,7 @@ def run_program():
             ang, rli_left, rli_right, progs[choice][0], turn_ang)
         show(t)
         done = change(b.buttons_pressed)
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     logging.info("And done.")
     logging.info("Running {}".format(progs[choice][0]))
