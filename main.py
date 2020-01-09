@@ -9,14 +9,18 @@ from ev3dev2.wheel import *
 from ev3dev2.sensor.lego import *
 from ev3dev2.sensor import *
 from ev3dev2.button import *
-#from ev3dev2.display import Display
+# from ev3dev2.display import Display
 from ev3dev2.console import Console
 from ev3dev2.sound import Sound
-#import ev3dev2.fonts as fonts
+# import ev3dev2.fonts as fonts
 import logging
 import time
 
 logging.basicConfig(level=logging.DEBUG)
+
+# Set true to follow black line
+LINE_USE_COLOR_SENSOR = True
+TURN_WITH_GYRO = True
 
 gyro = GyroSensor(INPUT_4)
 disp = Console()
@@ -27,7 +31,7 @@ color_left = ColorSensor(INPUT_2)
 color_right = ColorSensor(INPUT_3)
 # 14, 18, ...
 # See all: https://python-ev3dev.readthedocs.io/en/latest/display.html
-#f = fonts.load('luBS18')
+# f = fonts.load('luBS18')
 
 """
 Please depending on the robot change the number below:                                <<<       IMPORTANT!!!!                                         HEY!!!!
@@ -77,9 +81,9 @@ tank_drive = MoveTank(L_MOTOR, R_MOTOR)
 # tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 146.75)
 # Works great at 180 and speed 15 at 143
 # was turning too much on 1/5
-#tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
+# tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 143)
 # was turning too much on 1/6
-#tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 141.5)
+# tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 141.5)
 tank_diff = MoveDifferential(L_MOTOR, R_MOTOR, WideWheel, 141)
 
 
@@ -92,7 +96,7 @@ def show(text):
     down = 0
     # down = 50
     disp.text_at(text, 1, 1)
-    #disp.draw.text((lr, down), text, font=f, align="left")
+    # disp.draw.text((lr, down), text, font=f, align="left")
     # disp.update()
 
 
@@ -116,8 +120,53 @@ def follow_line(speed=10, want_rli=65, edge="right"):
         m2.on(speed + bias)
         time.sleep(0.01)
 
+# use right color sensor
+
+
+def follow_line_inches(dist=1, speed=10, want_rli=65, edge="right"):
+    m1 = LargeMotor(OUTPUT_A)
+    m2 = LargeMotor(OUTPUT_D)
+
+    rotations_total = inches_to_rotations(dist)
+
+    r1_start = m1.rotations
+    r2_start = m2.rotations
+
+    rotations_traveled = 0
+    while rotations_traveled < rotations_total:
+        rli = color_right.reflected_light_intensity
+        t = "rli: {}\n{}\n{}".format(rli, rotations_traveled, rotations_total)
+        show(t)
+        diff = rli - want_rli
+        # bigger adjustment for faster speed?
+        # factor = speed / 100.0
+        # light difference is +/- 40 but
+        # motor difference should be small.
+        factor = 0.025
+        bias = diff * factor
+        if edge == "left":
+            bias = -bias
+        m1.on(speed - bias)
+        m2.on(speed + bias)
+        time.sleep(0.01)
+
+        r1_rotations = m1.rotations - r1_start
+        r2_rotations = m2.rotations - r2_start
+
+        # average
+        rotations_traveled = (r1_rotations + r2_rotations) / 2.0
+        log.info("rli: {} {} {}".format(
+            rli, rotations_traveled, rotations_total))
+
+    m1.off()
+    m2.off()
+
 
 def follow_line_left():
+    follow_line(speed=10, want_rli=65, edge="left")
+
+
+def follow_line_left_wrap(gyro):
     follow_line(speed=10, want_rli=65, edge="left")
 
 
@@ -284,7 +333,7 @@ def long_gyro_test():
 # gyro: gyro sensor
 # deg: degrees to turn (positive is clockwise)
 # speed: motor speed 0-100 (must be positive)
-def turn_degrees_gyro(gyro, deg, speed=20):
+def turn_degrees_gyro(gyro, deg, speed=20, do_correction=True):
     gyro.mode = GyroSensor.MODE_GYRO_ANG
 
     if abs(deg) <= 1:
@@ -310,50 +359,70 @@ def turn_degrees_gyro(gyro, deg, speed=20):
     tank_drive.on(lspeed, rspeed)
     log.info("turning {}: {} {}".format(deg, lspeed, rspeed))
 
-    gyro.wait_until_angle_changed_by(abs(deg))
+    if do_correction:
+        turn_guess = abs(deg)
+    else:
+        turn_guess = abs(deg) - 9
+    gyro.wait_until_angle_changed_by(abs(turn_guess))
     tank_drive.off()
     time.sleep(0.5)
 
     final = gyro.value()
 
     log.info("gyro final value: {}".format(final))
+    log.info("angle: {} actual: {}".format(deg, final - start))
     log.info("stopping")
 
-    # Go back the amount we missed or went over.
-    correction = final - deg
-    log.info("correction: {}".format(correction))
+    if do_correction:
+        # Go back the amount we missed or went over.
+        correction = final - deg
+        log.info("correction: {}".format(correction))
 
-    if abs(correction) <= 1:
-        pass
+        if abs(correction) <= 1:
+            pass
+        else:
+            if deg > 0:
+                lspeed = 5
+            else:
+                lspeed = -5
+            turn_about_center = True
+            if turn_about_center:
+                rspeed = -lspeed
+            else:
+                rspeed = 0
+
+            tank_drive.on(rspeed, lspeed)
+            log.info("C: turning {}: {} {}".format(deg, lspeed, rspeed))
+            log.info("C: gyro in mode: {}".format(gyro.mode))
+            log.info("C: gyro inital value: {}".format(gyro.value()))
+            gyro.mode = GyroSensor.MODE_GYRO_ANG
+            log.info("C: gyro inital value after mode set: {}".format(gyro.value()))
+
+            gyro.wait_until_angle_changed_by(abs(correction)-1)
+            tank_drive.off()
+            time.sleep(0.5)
+            log.info("C: gyro final value: {}".format(gyro.value()))
+
+
+def my_turn_left(speed=20, angle=90):
+    if TURN_WITH_GYRO:
+        turn_degrees_gyro(gyro, -angle, speed, do_correction=False)
     else:
-        if deg > 0:
-            lspeed = 5
-        else:
-            lspeed = -5
-        turn_about_center = True
-        if turn_about_center:
-            rspeed = -lspeed
-        else:
-            rspeed = 0
+        tank_diff.turn_left(speed, degrees)
 
-        tank_drive.on(rspeed, lspeed)
-        log.info("C: turning {}: {} {}".format(deg, lspeed, rspeed))
-        log.info("C: gyro in mode: {}".format(gyro.mode))
-        log.info("C: gyro inital value: {}".format(gyro.value()))
-        gyro.mode = GyroSensor.MODE_GYRO_ANG
-        log.info("C: gyro inital value after mode set: {}".format(gyro.value()))
 
-        gyro.wait_until_angle_changed_by(abs(correction)-1)
-        tank_drive.off()
-        time.sleep(0.5)
-        log.info("C: gyro final value: {}".format(gyro.value()))
+def my_turn_right(speed=20, angle=90):
+    if TURN_WITH_GYRO:
+        turn_degrees_gyro(gyro, angle, speed, do_correction=False)
+    else:
+        tank_diff.turn_right(speed, degrees)
 
 
 def turn_degrees(gyro, deg, speed=15):
     if deg > 0:
-        tank_diff.turn_right(speed, deg)
+        my_turn_right(speed, deg)
     else:
-        tank_diff.turn_left(speed, -deg)
+        my_turn_left(speed, -deg)
 
 
 def inches_to_mill(inches):
@@ -365,14 +434,33 @@ def move_turn():
     tank_drive.on_for_seconds(SpeedPercent(-50), SpeedPercent(50), 0.65)
 
 
-def drive_inches(distance, speed=50):
+def inches_to_rotations_old(distance):
     # wheel diameter is 43.2mm (?)
     circum_inches = 4.32 * 3.14 / 2.54
     rotations = distance / circum_inches
+
+    return rotations
+
+
+def inches_to_rotations(distance):
+    # wheel diameter is 43.2mm (?), 68.8 for larger
+    circum_inches = 6.88 * 3.14 / 2.54
+    rotations = distance / circum_inches
+
+    return rotations
+
+
+def drive_inches(distance, speed=50):
+    rotations = inches_to_rotations(distance)
     speed = -speed if IS_INVERTED else speed
     # tank_drive.on_for_rotations(SpeedPercent(speed), SpeedPercent(speed), rotations)
     tank_diff.on_for_distance(SpeedPercent(
         speed), inches_to_mill(distance))
+
+
+def drive_inches_L_N_K_(distance, speed=30):
+    speed = -speed if IS_INVERTED else speed
+    target = gyro.angle
 
 
 def mission_2_crane(gyro):
@@ -393,7 +481,7 @@ def mission_white_blocks(gyro):
 
     drive_inches(.85, speed=12)
     # turn_degrees(gyro, -72, 15)
-    tank_diff.turn_right(15, 69.25)
+    my_turn_right(15, 69.25)
     drive_inches(61, 30)
     # LIFTER.on_for_rotations(10, 1)
     drive_inches(-4, 30)
@@ -408,140 +496,136 @@ def mission_white_blocks(gyro):
     # drive_inches(26)
 
 
-def mission_tan_blocks_old(gyro):
-    # drive_inches(36, 40)
-    # drive_inches(-36, 80)
-    drive_inches(2, 20)
-    tank_diff.turn_right(20, 63)
-    drive_inches(43, 46)
-    drive_inches(43, -46)
-    tank_diff.turn_right(20, 27)
-    drive_inches(20, -40)
-    tank_diff.turn_left(80, 80)
-
-
-def mission_tan_blocks_plus_save(gyro):
-    drive_inches(2, 15)
-    #tank_diff.turn_right(15, 65.75)
-    tank_diff.turn_right(15, 77)
-    # Drive almost to white
-    drive_inches(37.5, 30)
-    align_color("White")
-    align_accurate(10, num_passes=3)
-    # turn
-    turn_to_tan = 43.75
-    tank_diff.turn_left(15, turn_to_tan)
-    drive_inches(7.75, 20)
-    drive_inches(-7.75, 20)
-    tank_diff.turn_right(15, turn_to_tan + 6)
-    drive_inches(18, 20)
-
-
 def down(gyro):
     lifter.on_for_degrees(-50, 15, brake=False)
 
 
 def big_O_by_crane(gyro):
     drive_inches(18, 25)
+    drive_inches(-9, 30)
+    my_turn_right(50, 90)
+    drive_inches(-13, 30)
+    drive_inches(1)
+    my_turn_left(50, 90)
 
 
 def red_ending(gyro):
     """
     Setup the robot with the wheels on the 5th hashmark.
     """
-    drive_inches(5, 15)
-    #tank_diff.turn_right(15, 65.75)
-    tank_diff.turn_right(15, 89.5)
-    # Drive almost to white
-    drive_inches(39, 30)
+    drive_out_black_line()
     # @ or near
-    tank_diff.turn_left(15, 30)
+    my_turn_left(15, 30)
     drive_inches(1, 10)
     align_color("White")
-    #first align
+    # first align
     align_accurate(10, num_passes=3)
     drive_inches(5, 30)
-    tank_diff.turn_left(15, 90)
+    my_turn_left(15, 90)
     align_color("White")
     align_accurate(10, num_passes=3)
-    #SECOND align
-    #drive_inches(-3.5, 10)
-    tank_diff.turn_left(15, 65)
+    # SECOND align
+    # drive_inches(-3.5, 10)
+    my_turn_left(15, 65)
     drive_inches(11, 20)
-    lifter.on_for_degrees(50, 350, brake=False)
-    #End of the blocks, starting the bridge
+    lifter.on_for_degrees(50, 650, brake=False)
+    # End of the blocks, starting the bridge
     drive_inches(-7.5, 20)
-    tank_diff.turn_right(15, 65)
-    #The Big Ending
+    my_turn_right(15, 65)
+    # The Big Ending
     drive_inches(10, 30)
     align_accurate(10, num_passes=2)
     drive_inches(-6, 20)
     drive_inches(35, 35)
 
+
 def circle_straight(gyro):
     drive_inches(16, 30)
     lifter.on_for_rotations(50, 1)
     drive_inches(-8, 30)
-    tank_diff.turn_right(15, 45)
+    my_turn_right(15, 45)
     drive_inches(-19, 30)
     drive_inches(1, 30)
-    tank_diff.turn_left(15, 90)
+    my_turn_left(15, 90)
     s.beep()
     s.beep()
     s.beep()
     s.beep()
+
+
+def drive_out_black_line_without_cs():
+    # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
+    drive_inches(5, 15)
+    # my_turn_right(15, 65.75)
+    my_turn_right(15, 90)
+    # Drive almost to white
+    drive_inches(40, 30)
+
+
+def drive_out_black_line_with_cs():
+    # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
+    drive_inches(5, 15)
+    # my_turn_right(15, 65.75)
+    #my_turn_right(15, 90)
+    turn_degrees_gyro(gyro, 90, do_correction=False)
+    # Drive almost to white
+    drive_inches(12.5, 30)
+    # 20.5 along line
+    follow_line_inches(dist=20.5, speed=30, edge="left", want_rli=32)
+    drive_inches(5, 30)
+
+
+def drive_out_black_line():
+    if (LINE_USE_COLOR_SENSOR):
+        drive_out_black_line_with_cs()
+    else:
+        drive_out_black_line_without_cs()
 
 
 def mission_tan_blocks_plus(gyro):
-    # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
-    drive_inches(5, 15)
-    #tank_diff.turn_right(15, 65.75)
-    tank_diff.turn_right(15, 90.5)
-    # Drive almost to white
-    drive_inches(40, 30)
-    # align_left()
-    tank_diff.turn_left(15, 30)
+    drive_out_black_line()
+    my_turn_left(15, 30)
     align_color("White")
     align_accurate(10, num_passes=3)
     drive_inches(9, 30)
-    tank_diff.turn_left(15, 90)
+    my_turn_left(15, 90)
     align_color("White")
     align_accurate(10, num_passes=3)
     drive_inches(4.75, 20)
     drive_inches(-4.75, 20)
     # M08_Elevator
-    tank_diff.turn_right(15, 90)
+    my_turn_right(15, 90)
     drive_inches(10, 40)
     lifter.on_for_rotations(50, 1, brake=False)
     drive_inches(-10, speed=20)
     lifter.on_for_rotations(-50, 1, brake=False)
     # Mo9_safety factor
     turn_extra = 17
-    tank_diff.turn_right(15, 30 + turn_extra)
+    my_turn_right(15, 30 + turn_extra)
     lifter.on_for_degrees(50, 120, brake=False)
     drive_inches(5, 20)
     # swing front pointer 20 left, (20 right to straighten then) 20 right
     swing_turn = 20
-    tank_diff.turn_left(15, turn_extra + swing_turn / 2)
+    my_turn_left(15, turn_extra + swing_turn / 2)
     lifter.on_for_degrees(-50, 90, brake=False)
-    tank_diff.turn_left(15, swing_turn / 2)
-    #tank_diff.turn_right(15, swing_turn * 2)
-    #tank_diff.turn_right(15, swing_turn)
+    my_turn_left(15, swing_turn / 2)
+    # my_turn_right(15, swing_turn * 2)
+    # my_turn_right(15, swing_turn)
     drive_inches(-1, 20)
-    tank_diff.turn_right(15, swing_turn + 90)
+    my_turn_right(15, swing_turn + 90)
     lifter.on_for_degrees(50, 90, brake=False)
     drive_inches(4, 30)
-    tank_diff.turn_left(15, 45)
+    my_turn_left(15, 45)
     drive_inches(-2, 30)
-    tank_diff.turn_left(15, 55)
+    my_turn_left(15, 55)
     drive_inches(-65, 60)
     drive_inches(1, 30)
-    tank_diff.turn_right(50, 75)
+    my_turn_right(50, 75)
 
     # drive_inches(43, -46)
-    # tank_diff.turn_right(15, 27)
+    # my_turn_right(15, 27)
     # drive_inches(20, -40)
-    # tank_diff.turn_left(80, 80)
+    # my_turn_left(80, 80)
 
 
 def mission_red_blocks(gyro):
@@ -556,10 +640,10 @@ def mission_red_blocks(gyro):
     """
 
     drive_inches(9, 20)
-    tank_diff.turn_right(15, 85)
+    my_turn_right(15, 85)
     drive_inches(22.5, 30)
     drive_inches(-37, 80)
-    tank_diff.turn_left(80, 80)
+    my_turn_left(80, 80)
 
 
 def motor_test(gyro):
@@ -575,23 +659,24 @@ turn_ang = 180
 
 
 def turn_test(gyro):
-    tank_diff.turn_right(15, turn_ang)
+    my_turn_right(15, turn_ang)
     time.sleep(5)
-    tank_diff.turn_left(15, turn_ang)
+    my_turn_left(15, turn_ang)
 
 
 progs = [
 
+    #("m: line", follow_line_left_wrap),
     ("m: tan blocks", mission_tan_blocks_plus),
     ("m: Big O Crane", big_O_by_crane),
-    ("m: ReD EnDiNg", red_ending),
     ("m: circle_straight", circle_straight),
-    ("m: align",  align_once),
-    ("m: test",  motor_test),
-    ("m: turn_test", turn_test),
-    ("m: white blocks", mission_white_blocks),
-    ("m: red blocks", mission_red_blocks),
-    ("m: 2 crane", mission_2_crane),
+    ("m: ReD EnDiNg", red_ending),
+    # ("m: align",  align_once),
+    # ("m: test",  motor_test),
+    # ("m: turn_test", turn_test),
+    # ("m: white blocks", mission_white_blocks),
+    # ("m: red blocks", mission_red_blocks),
+    # ("m: 2 crane", mission_2_crane),
 ]
 
 
