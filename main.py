@@ -69,6 +69,7 @@ else:
 
 M_MOTOR = OUTPUT_B
 lifter = MediumMotor(M_MOTOR)
+side_motor = MediumMotor(OUTPUT_C)
 
 
 class WideWheel(Wheel):
@@ -333,7 +334,7 @@ def long_gyro_test():
 # gyro: gyro sensor
 # deg: degrees to turn (positive is clockwise)
 # speed: motor speed 0-100 (must be positive)
-def turn_degrees_gyro(gyro, deg, speed=20, do_correction=True):
+def turn_degrees_gyro_orig(gyro, deg, speed=20, do_correction=True):
     gyro.mode = GyroSensor.MODE_GYRO_ANG
 
     if abs(deg) <= 1:
@@ -402,6 +403,70 @@ def turn_degrees_gyro(gyro, deg, speed=20, do_correction=True):
             tank_drive.off()
             time.sleep(0.5)
             log.info("C: gyro final value: {}".format(gyro.value()))
+
+# do_correction is ignored
+def turn_degrees_gyro(gyro, deg, speed=20, do_correction=True):
+    #gyro.mode = GyroSensor.MODE_GYRO_ANG
+
+    if deg > 0:
+        lspeed = speed
+    else:
+        lspeed = -speed
+    turn_about_center = True
+    if turn_about_center:
+        rspeed = -lspeed
+    else:
+        rspeed = 0
+    #time.sleep(0.5)
+    #gyro.reset()
+
+    start = gyro.value()
+    log.info("wheel speed: {} {}".format(lspeed, rspeed))
+    log.info("gyro inital value: {}".format(start))
+    log.info("gyro in mode: {}".format(gyro.mode))
+    # log.info("gyro inital value after mode set: {}".format(gyro.value))
+
+    tank_drive.on(lspeed, rspeed)
+    log.info("turning {}: {} {}".format(deg, lspeed, rspeed))
+
+    # last part turn slow
+    slow_degrees = 10
+    turn_guess = abs(deg) - slow_degrees
+
+    if turn_guess > 0:
+         gyro.wait_until_angle_changed_by(turn_guess)
+
+    # finish slow
+    # NO!! 5 locked wheel
+    slow_speed = 7
+    if lspeed > 0:
+        lspeed = slow_speed
+        rspeed = -slow_speed
+    else:
+        lspeed = -slow_speed
+        rspeed = slow_speed
+    log.info("wheel speed: {} {}".format(lspeed, rspeed))
+    tank_drive.on(lspeed, rspeed)
+    #log.info("gyro intermediate value: {}".format(gyro.value()))
+
+    # code from gyro.wait_until_angle_changed_by
+    delta = deg
+    if delta > 0:
+        while (gyro.value() - start) < delta:
+            time.sleep(0.01)
+    else:
+        delta *= -1
+        while (start - gyro.value()) < delta:
+            time.sleep(0.01)
+
+    tank_drive.off()
+    time.sleep(0.5)
+
+    final = gyro.value()
+
+    log.info("gyro final value: {}".format(final))
+    log.info("angle: {} actual: {}".format(deg, final - start))
+    log.info("stopping")
 
 
 def my_turn_left(speed=20, angle=90):
@@ -562,27 +627,47 @@ def drive_out_black_line_without_cs():
     drive_inches(40, 30)
 
 
-def drive_out_black_line_with_cs():
+def drive_out_black_line_with_cs(raise_side=False):
     # extend lowwer bar two studs and add lift after placement of tan blocks, lower it again and lift after earthquake
     drive_inches(5, 15)
-    # my_turn_right(15, 65.75)
-    #my_turn_right(15, 90)
-    turn_degrees_gyro(gyro, 90, do_correction=False)
+    # lots of weight on left so read how much turned
+    # starting at 0
+    time.sleep(0.01)
+    gyro_start = gyro.value()
+    log.info("Initial gyro angle: {}".format(gyro_start))
+    extra_turn = -gyro_start + 1
+    my_turn_right(15, 90 + extra_turn)
+
     # Drive almost to white
-    drive_inches(12.5, 30)
+    # first get to line to follow
+    # for left edge
+    # edge = "left"
+    #drive_inches(12.5, 30)
+    # for right edge
+    edge = "right"
+    drive_inches(11.7, 30)
+
     # 20.5 along line
-    follow_line_inches(dist=20.5, speed=30, edge="left", want_rli=32)
-    drive_inches(5, 30)
-
-
-def drive_out_black_line():
-    if (LINE_USE_COLOR_SENSOR):
-        drive_out_black_line_with_cs()
+    # do we lift side pusher on way out?
+    if raise_side:
+        # drive a little lift then drive the rest
+        follow_line_inches(dist=18.5, speed=30, edge=edge, want_rli=32)
+        # lift
+        side_motor.on_for_degrees(speed=50, degrees=100)
+        follow_line_inches(dist=2, speed=30, edge=edge, want_rli=32)
     else:
-        drive_out_black_line_without_cs()
+        follow_line_inches(dist=20.5, speed=30, edge=edge, want_rli=32)
+    #drive_inches(5, 30)
+    drive_inches(3, 30)
+
+def drive_out_black_line(raise_side=False):
+    if LINE_USE_COLOR_SENSOR:
+        drive_out_black_line_with_cs(raise_side=raise_side)
+    else:
+        drive_out_black_line_without_cs(raise_side=raise_side)
 
 
-def mission_tan_blocks_plus(gyro):
+def mission_tan_blocks_plus_before_20200109(gyro):
     drive_out_black_line()
     my_turn_left(15, 30)
     align_color("White")
@@ -626,6 +711,89 @@ def mission_tan_blocks_plus(gyro):
     # my_turn_right(15, 27)
     # drive_inches(20, -40)
     # my_turn_left(80, 80)
+
+# add dropping red blocks and driving up ramp
+def mission_tan_blocks_plus(gyro):
+    drive_out_black_line(raise_side=True)
+    my_turn_left(speed=15, angle=15)
+    drive_inches(4, 20)
+    my_turn_left(speed=15, angle=15)
+    # XXX Tweak
+    #align_color("White")
+    align_accurate(10, num_passes=3)
+    drive_inches(9, 30)
+    my_turn_left(20, 90)
+    drive_inches(2, 20)
+    align_color("White")
+    align_accurate(10, num_passes=3)
+    drive_inches(4.75, 20)
+    drive_inches(-4.75, 20)
+    # M08_Elevator
+    my_turn_right(20, 90)
+    drive_inches(10, 40)
+    lifter.on_for_rotations(50, 1, brake=False)
+    drive_inches(-10, speed=20)
+    lifter.on_for_rotations(-50, 1, brake=False)
+    # Mo9_safety factor
+    # was 17
+    #turn_extra = 17
+    # XXX Tweak - last tried 13
+    turn_extra = 9
+    my_turn_right(20, 30 + turn_extra)
+    lifter.on_for_degrees(50, 120, brake=False)
+    # was 5 but not far enough
+    drive_inches(6, 20)
+    # swing front pointer 20 left, (20 right to straighten then) 20 right
+    swing_turn = 20
+    my_turn_left(20, turn_extra + swing_turn / 2)
+    # push building support down
+    lifter.on_for_degrees(-50, 90, brake=False)
+    my_turn_left(15, swing_turn / 2)
+    # my_turn_right(15, swing_turn * 2)
+    # my_turn_right(15, swing_turn)
+    drive_inches(-1, 20)
+    # point towards the swing
+    my_turn_right(20, swing_turn + 90)
+    # lift arm to push swing
+    lifter.on_for_degrees(50, 90, brake=False)
+    # drive to swing
+    drive_inches(4, 30)
+    # push swing by turning a little
+    my_turn_left(20, 45)
+    # old program - get home
+    # drive_inches(-2, 30)
+    # my_turn_left(15, 55)
+    # drive_inches(-65, 60)
+    # drive_inches(1, 30)
+    # my_turn_right(50, 75)
+
+    # Spencer 1/9/2020
+    # backup 6 inches for safe turn apot
+    drive_inches(-6, 30)
+    lifter.on_for_degrees(50, 600, brake=False)
+    # align on line perp to ramp line
+    # watch out for the lettering over white
+    #align_color("White")
+    my_turn_left(speed=20, angle=180)
+    drive_inches(2, 20)
+    align_accurate(10, num_passes=3)
+    # get color sensors away from black line
+    drive_inches(1.5, 20)
+    # get to ramp line
+    my_turn_left(20, 90)
+    drive_inches(4, 20)
+    align_accurate(10, num_passes=2)
+    drive_inches(1.5, 15)
+    my_turn_right(20, 90)
+    drive_inches(10, 15)
+
+    lifter.on_for_degrees(50, -300, brake=False)
+    # go up ramp, copied from red ending
+
+    # The Big Ending
+    align_accurate(10, num_passes=2)
+    drive_inches(-6, 20)
+    drive_inches(35, 35)
 
 
 def mission_red_blocks(gyro):
@@ -738,6 +906,11 @@ def run_program():
 
     logging.info("And done.")
     logging.info("Running {}".format(progs[choice][0]))
+
+    # added 1/9/2020
+    #gyro.reset()
+    #time.sleep(1)
+
     progs[choice][1](gyro)
     s.beep()
 
@@ -746,7 +919,11 @@ def run_program():
 
 if __name__ == "__main__":
     # Resets to 0, does not fix drift
+    time.sleep(1)
+    gyro.mode = GyroSensor.MODE_GYRO_ANG
     gyro.reset()
+    time.sleep(1)
+    log.info("Starting angle: {}".format(gyro.value()))
     b.on_change = change
     s.beep()
     s.beep()
