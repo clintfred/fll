@@ -765,7 +765,7 @@ def mission_tan_blocks_plus_before_20200109(gyro):
     # swing front pointer 20 left, (20 right to straighten then) 20 right
     # tjs
     swing_turn = 16
-    my_turn_left(15, turn_extra + swing_turn / 2)
+    my_turn_left(15, turn_extra)
     lifter.on_for_degrees(-50, 90, brake=False)
     my_turn_left(15, swing_turn / 2)
     # my_turn_right(15, swing_turn * 2)
@@ -863,12 +863,14 @@ def mission_tan_blocks_plus(gyro):
     # get color sensors away from black line
     drive_inches(1.5, 20)
     # get to ramp line
-    my_turn_left(20, 90)
+    my_turn_left(10, 90)
     drive_inches(4, 20)
     align_accurate(10, num_passes=2)
     # originally 1.5
-    drive_inches(2, 15)
-    my_turn_right(20, 90)
+    #drive_inches(2, 15)
+    #my_turn_right(15, 90)
+    drive_inches(1.75, 15)
+    my_turn_right(10, 90)
     drive_inches(10, 15)
 
     lifter.on_for_degrees(50, -300, brake=False)
